@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2018-2023, libracore (https://www.libracore.com) and contributors
+# Copyright (c) 2018-2024, libracore (https://www.libracore.com) and contributors
 # For license information, please see license.txt
 
 from __future__ import unicode_literals
@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import time
 from erpnextswiss.erpnextswiss.common_functions import get_building_number, get_street_name, get_pincode, get_city, get_primary_address
 import html          # used to escape xml content
-from frappe.utils import cint, get_url_to_form
+from frappe.utils import cint, get_url_to_form, rounded
 from unidecode import unidecode     # used to remove German/French-type special characters from bank identifieres
 
 PAYMENT_REMARKS = "From Payment Proposal {0}"
@@ -51,7 +51,7 @@ class PaymentProposal(Document):
         
     def on_submit(self):
         # clean payments (to prevent accumulation on re-submit)
-        self.payments = {}
+        self.payments = []
         # create the aggregated payment table
         # collect customers
         suppliers = []
@@ -107,7 +107,7 @@ class PaymentProposal(Document):
                     if self.use_intermediate == 1:
                         self.create_payment("Supplier", supplier, 
                             "Purchase Invoice", purchase_invoice.purchase_invoice, exec_date,
-                            purchase_invoice.amount)
+                            purchase_invoice.amount, self.company)
             # make sure execution date is valid
             if exec_date < datetime.now():
                 exec_date = datetime.now()      # + timedelta(days=1)
@@ -229,30 +229,28 @@ class PaymentProposal(Document):
             if pay_date.date() < datetime.now().date():
                 pay_date = datetime.now().date()
             # append payment record
-            new_payment = self.append('payments', {})
-            new_payment.receiver = receiver_name
-            new_payment.receiver_id = receiver_id
-            new_payment.iban = iban
-            new_payment.bic = bic
-            new_payment.payment_type = payment_type
-            new_payment.receiver_address_line1 = address_line1
-            new_payment.receiver_address_line2 = address_line2
-            new_payment.receiver_country = country           
-            new_payment.amount = amount
-            new_payment.currency = currency
-            if len(reference) > 140:
-                new_payment.reference = "{0}...".format(reference[:136])
-            else:
-                new_payment.reference = reference
-            new_payment.execution_date = pay_date
-            new_payment.esr_reference = esr_reference
-            new_payment.esr_participation_number = esr_participation_number   
-            new_payment.is_salary = is_salary   
+            new_payment = self.append('payments', {
+                'receiver': receiver_name,
+                'receiver_id': receiver_id,
+                'iban': iban,
+                'bic': bic,
+                'payment_type': payment_type,
+                'receiver_address_line1': address_line1,
+                'receiver_address_line2': address_line2,
+                'receiver_country': country,    
+                'amount': amount,
+                'currency': currency,
+                'reference': "{0}...".format(reference[:136]) if len(reference) > 140 else reference,
+                'execution_date': pay_date,
+                'esr_reference': esr_reference,
+                'esr_participation_number': esr_participation_number,
+                'is_salary': is_salary 
+            })
             return
     
     def create_payment(self, party_type, party_name, 
                             reference_type, reference_name, date,
-                            amount):
+                            amount, company):
         if reference_type == "Purchase Invoice":
             credit_to = frappe.get_value(reference_type, reference_name, "credit_to")
         elif reference_type == "Expense Claim":
@@ -263,6 +261,7 @@ class PaymentProposal(Document):
         # create new payment entry
         new_payment_entry = frappe.get_doc({
             'doctype': 'Payment Entry',
+            'company': company, 
             'payment_type': "Pay",
             'party_type': party_type,
             'party': party_name,
@@ -378,6 +377,26 @@ class PaymentProposal(Document):
         content = frappe.render_template('erpnextswiss/erpnextswiss/doctype/payment_proposal/pain-001.html', data)
         return { 'content': content }
     
+    def create_wise_file(self):
+        data = {
+            'payments': []
+        }
+        source_currency = frappe.get_cached_value("Account", self.pay_from_account, "account_currency")
+        for payment in self.payments:
+            data['payments'].append({
+                'recipient': payment.receiver,
+                'recipient_mail': "",
+                'reference': payment.reference,
+                'amount': rounded(payment.amount, 2),
+                'source_currency': source_currency,
+                'target_currency': payment.currency,
+                'iban': payment.iban.replace(" ", "")
+            })
+
+        # render file
+        content = frappe.render_template('erpnextswiss/erpnextswiss/doctype/payment_proposal/transferwise_payments.html', data)
+        return { 'content': content }
+        
     def add_creditor_info(self, payment):
         payment_content = ""
         # creditor information
