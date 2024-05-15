@@ -58,7 +58,8 @@ jenv = {
         "get_accounts_receivable:erpnextswiss.erpnextswiss.jinja.get_accounts_receivable",
         "get_primary_company_address:erpnextswiss.scripts.crm_tools.get_primary_company_address",
         "get_primary_customer_address:erpnextswiss.scripts.crm_tools.get_primary_customer_address",
-        "get_primary_supplier_address:erpnextswiss.scripts.crm_tools.get_primary_supplier_address"
+        "get_primary_supplier_address:erpnextswiss.scripts.crm_tools.get_primary_supplier_address",
+        "get_vat_control_details:erpnextswiss.erpnextswiss.report.kontrolle_mwst.kontrolle_mwst.get_vat_control_details"
     ]
 }
 
@@ -120,6 +121,12 @@ after_install = "erpnextswiss.setup.install.after_install"
 #         "on_trash": "method"
 #    }
 # }
+doc_events = {
+    "Contact": {
+        "on_update": "erpnextswiss.erpnextswiss.nextcloud.contacts.send_contact_to_nextcloud",
+        "on_trash": "erpnextswiss.erpnextswiss.nextcloud.contacts.delete_contact_from_nextcloud"
+    }
+}
 
 # Scheduled Tasks
 # ---------------
