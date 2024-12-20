@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2017-2023, libracore and contributors
+# Copyright (c) 2017-2024, libracore and contributors
 # License: AGPL v3. See LICENCE
 
-from __future__ import unicode_literals
 import frappe
 from frappe import throw, _
 import hashlib
@@ -10,7 +9,7 @@ import json
 from bs4 import BeautifulSoup
 import ast
 import six
-from frappe.utils import cint
+from frappe.utils import cint, flt
 from frappe.utils.data import get_url_to_form
 
 # this function tries to match the amount to an open sales invoice
@@ -199,6 +198,31 @@ def get_payable_account(company=None, employee=False):
 def get_first_company():
     companies = frappe.get_all("Company", filters=None, fields=['name'])
     return companies[0]['name']
+
+"""
+Interpret meta information of the camt.053 record
+
+Input: camt.053-xml-string
+Output: meta-dict
+"""
+def read_camt053_meta(content):
+    soup = BeautifulSoup(content, 'lxml')
+    meta = {
+        'iban': soup.document.bktocstmrstmt.stmt.acct.id.iban.get_text(),
+        'electronic_sequence_number': soup.document.bktocstmrstmt.stmt.elctrncseqnb.get_text(),
+        'msgid': soup.document.bktocstmrstmt.stmt.id.get_text(),
+        'currency': soup.document.bktocstmrstmt.stmt.acct.ccy.get_text()
+    }
+    # find balances
+    balances = soup.find_all('bal')
+    for balance in balances:
+        balance_soup = BeautifulSoup(str(balance), 'lxml')
+        if balance_soup.tp.cdorprtry.cd.get_text() == "OPBD":
+            meta['opening_balance'] = float(balance_soup.amt.get_text())
+        elif balance_soup.tp.cdorprtry.cd.get_text() == "CLBD":
+            meta['closing_balance'] = float(balance_soup.amt.get_text())
+            
+    return meta
 
 @frappe.whitelist()
 def read_camt053(content, account):
@@ -458,12 +482,18 @@ def read_camt_transactions(transaction_entries, account, settings, debug=False):
                         if payment_instruction_id:
                             try:
                                 payment_instruction_fields = payment_instruction_id.split("-")
-                                payment_instruction_row = int(payment_instruction_fields[-1]) + 1
+                                try:
+                                    payment_instruction_row = int(payment_instruction_fields[-1]) + 1
+                                except:
+                                    # invalid payment instruction id (cannot parse, e.g. on LSV or foreign pain.001 source) - no match
+                                    payment_instruction_row = None
                                 if len(payment_instruction_fields) > 3:
                                     # revision in payment proposal
                                     payment_proposal_id = "{0}-{1}".format(payment_instruction_fields[1], payment_instruction_fields[2])
-                                else:
+                                elif len(payment_instruction_fields) > 1:
                                     payment_proposal_id = payment_instruction_fields[1]
+                                else:
+                                    payment_proposal_id = None
                                 # find original instruction record
                                 payment_proposal_payments = frappe.get_all("Payment Proposal Payment", 
                                     filters={'parent': payment_proposal_id, 'idx': payment_instruction_row},
@@ -568,6 +598,10 @@ def read_camt_transactions(transaction_entries, account, settings, debug=False):
                                     # allow the numeric part matching
                                     if get_numeric_only_reference(sinv['name']) in transaction_reference: 
                                         # matched numeric part and customer name
+                                        is_match = True
+                                elif cint(settings.ignore_special_characters) == 1:
+                                    if remove_special_characters(sinv['name']) in remove_special_characters(transaction_reference):
+                                        # matched without special characters
                                         is_match = True
 
                                 if is_match:
@@ -814,7 +848,7 @@ def make_payment_entry(amount, date, reference_no, paid_from=None, paid_to=None,
             matched_entry.save()
         matched_entry.submit()
         frappe.db.commit()
-    return get_url_to_form("Payment Entry", new_entry.name)
+    return {'link': get_url_to_form("Payment Entry", new_entry.name), 'payment_entry': new_entry.name}
 
 # creates the reference record in a payment entry
 def create_reference(payment_entry, invoice_reference, invoice_type="Sales Invoice"):
@@ -855,3 +889,7 @@ def get_numeric_only_reference(s):
         if c.isdigit():
             n += c
     return n
+
+def remove_special_characters(s):
+    return (s or "").replace(" ", "").replace("-", "")
+    
