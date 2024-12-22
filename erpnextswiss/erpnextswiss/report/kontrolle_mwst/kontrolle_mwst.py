@@ -7,7 +7,7 @@ from frappe import _
 
 def execute(filters=None):
     columns, data = [], []
-    
+
     if not filters.from_date:
         filters.from_date = "2000-01-01"
     if not filters.end_date:
@@ -31,12 +31,12 @@ def execute(filters=None):
 def get_data(from_date, end_date, code, company="%"):
     # try to fetch data from VAT query
     if frappe.db.exists("VAT query", "viewVAT_{code}".format(code=code)):
-        sql_query = ("""SELECT * 
-                FROM ({query}) AS `s` 
-                WHERE `s`.`posting_date` >= '{start_date}' 
+        sql_query = ("""SELECT *
+                FROM ({query}) AS `s`
+                WHERE `s`.`posting_date` >= '{start_date}'
                 AND `s`.`posting_date` <= '{end_date}'""".format(
                 query=frappe.get_value("VAT query", "viewVAT_{code}".format(code=code), "query"),
-                start_date=from_date, end_date=end_date).replace("{company}", company))      
+                start_date=from_date, end_date=end_date).replace("{company}", company))
     else:
         # fallback database view
         sql_query = """SELECT
@@ -47,20 +47,13 @@ def get_data(from_date, end_date, code, company="%"):
                     AND `posting_date` <= \"{end_date}\"
                 ORDER BY
                     `posting_date`;""".format(
-                    start_date=from_date, end_date=end_date, code=code)     
+                    start_date=from_date, end_date=end_date, code=code)
     try:
         data = frappe.db.sql(sql_query, as_dict = True)
     except:
         return []
     return data
 
-<<<<<<< HEAD
 # v15 wrapper for jinja/get_data (incompatible function name rewrite)
 def get_tax_details(from_date, end_date, code, company="%"):
     return get_data(from_date, end_date, code, company)
-=======
-# this is an endpoint for the jinja environment
-def get_vat_control_details(from_date, end_date, code, company="%"):
-    return get_data(from_date, end_date, code, company)
-    
->>>>>>> master
