@@ -1,5 +1,5 @@
 frappe.ui.form.on('Purchase Invoice', {
-    refresh(frm) {
+    'refresh': function(frm) {
         cur_frm.dashboard.clear_comment();
         if (frm.doc.__islocal||cur_frm.doc.docstatus == '0') {
             frm.add_custom_button(__("Scan Invoice"), function() {
@@ -15,7 +15,7 @@ frappe.ui.form.on('Purchase Invoice', {
         
         check_supplier_payment_details(frm);
     },
-    validate: function(frm) {
+    'validate': function(frm) {
         if (frm.doc.payment_type === "ESR") {
             if (frm.doc.esr_reference_number) {
                 if ((!frm.doc.esr_reference_number.startsWith("RF")) && (!check_esr(frm.doc.esr_reference_number))) {
@@ -67,12 +67,19 @@ frappe.ui.form.on('Purchase Invoice', {
                 }
             }
         }
+        // test valid characters in supplier invoice number
+        if (frm.doc.bill_no) {
+            if (!/^([A-Za-z0-9]|[+\?\/\-:().,'\p{Zs}])*$/u.test(frm.doc.bill_no)) {
+                frappe.msgprint( __("The supplier invoice number <b>{0}</b> contains invalid characters.").replace("{0}", frm.doc.bill_no), __("Validation") );
+                frappe.validated = false;
+            }
+        }
     },
-    supplier: function(frm) {
+    'supplier': function(frm) {
         pull_supplier_defaults(frm);
         check_supplier_payment_details(frm);
     },
-    payment_type: function(frm) {
+    'payment_type': function(frm) {
         check_supplier_payment_details(frm);
     }
 });
@@ -182,7 +189,8 @@ function get_data_based_on_esr(frm, participant, reference, amount, default_sett
                 if (!more_than_one_supplier) {
                     // exatly one supplier
                     var supplier = response.message.supplier;
-                    show_esr_detail_dialog(frm, participant, reference, amount, default_settings, supplier, []);
+                    var supplier_name = response.message.supplier_name;
+                    show_esr_detail_dialog(frm, participant, reference, amount, default_settings, supplier, supplier_name, []);
                 } else {
                     // more than one supplier
                     var _suppliers = response.message.supplier;
@@ -191,31 +199,31 @@ function get_data_based_on_esr(frm, participant, reference, amount, default_sett
                         suppliers.push(_suppliers[i]["supplier_name"] + " // (" + _suppliers[i]["name"] + ")");
                     }
                     suppliers = suppliers.join('\n');
-                    show_esr_detail_dialog(frm, participant, reference, amount, default_settings, false, suppliers);
+                    show_esr_detail_dialog(frm, participant, reference, amount, default_settings, false, null, suppliers);
                 }
             } else {
-                show_esr_detail_dialog(frm, participant, reference, amount, default_settings, false, []);
+                show_esr_detail_dialog(frm, participant, reference, amount, default_settings, false, null, []);
             }
         }
     });
 }
 
-function show_esr_detail_dialog(frm, participant, reference, amount, default_settings, supplier, supplier_list) {
+function show_esr_detail_dialog(frm, participant, reference, amount, default_settings, supplier, supplier_name, supplier_list) {
     var field_list = [];
     if (supplier) {
         if (!cur_frm.doc.supplier||cur_frm.doc.supplier == supplier) {
-            var supplier_matched_txt = "<p style='color: green;'>" + __("Supplier matched") + "</p>";
+            var supplier_matched_txt = `<p style='color: green;'>${__("Supplier matched")} (${supplier_name})</p>`;
             field_list.push({'fieldname': 'supplier', 'fieldtype': 'Link', 'label': __('Supplier'), 'reqd': 1, 'options': 'Supplier', 'default': supplier, 'description': supplier_matched_txt});
         } else {
-            var supplier_missmatch_txt = "<p style='color: orange;'>" + __("Supplier found, but does not match with Invoice Supplier!") + "</p>";
+            var supplier_missmatch_txt = `<p style='color: orange;'>${__("Supplier found, but does not match with Invoice Supplier!")}</p>`;
             field_list.push({'fieldname': 'supplier', 'fieldtype': 'Link', 'label': __('Supplier'), 'reqd': 1, 'options': 'Supplier', 'default': supplier, 'description': supplier_missmatch_txt});
         }
     } else {
         if (supplier_list.length < 1) {
-            var supplier_not_found_txt = "<p style='color: red;'>" + __("No Supplier found! Fetched default Supplier.") + "</p>";
+            var supplier_not_found_txt = `<p style='color: red;'>${__("No Supplier found! Fetched default Supplier.")}</p>`;
             field_list.push({'fieldname': 'supplier', 'fieldtype': 'Link', 'label': __('Supplier'), 'reqd': 1, 'options': 'Supplier', 'default': default_settings.supplier, 'description': supplier_not_found_txt});
         } else {
-            var multiple_supplier_txt = "<p style='color: orange;'>" + __("Multiple Supplier found, please choose one!") + "</p>";
+            var multiple_supplier_txt = `<p style='color: orange;'>${__("Multiple Supplier found, please choose one!")}</p>`;
             field_list.push({'fieldname': 'supplier', 'fieldtype': 'Select', 'label': __('Supplier'), 'reqd': 1, 'options': supplier_list, 'description': multiple_supplier_txt});
         }
     }
