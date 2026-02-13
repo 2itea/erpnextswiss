@@ -8,7 +8,10 @@ from frappe.utils.password import get_decrypted_password
 import os
 import codecs
 from datetime import datetime, timedelta
-import pysftp
+try:
+    import pysftp
+except ImportError:
+    pysftp = None
 
 @frappe.whitelist()
 def create_shipment(shipment_name, debug=False):
@@ -203,6 +206,8 @@ def upload_shipment_file(file_name, target_path):
     return
 
 def connect_sftp(settings):
+    if pysftp is None:
+        frappe.throw(_("pysftp is not installed. Please install it with: pip install pysftp"))
     cnopts = pysftp.CnOpts()
     cnopts.hostkeys = settings.get('host_keys') or None        # keep or None to push None instead of ""  
     
