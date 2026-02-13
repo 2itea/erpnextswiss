@@ -10,16 +10,17 @@
  *  txt                     message string
  *  check_all_attachments   true/false, default false
  *  replace_template        true/false, default false, if false, template is prepended, otherwise, the template replaces the content
- * 
+ *
  */
 
-frappe.provide('frappe.erpnextswiss.MailComposer');
-frappe.erpnextswiss.MailComposer = Class.extend({
-    init: function(opts) {
+frappe.provide('frappe.erpnextswiss');
+frappe.erpnextswiss.MailComposer = class MailComposer {
+    constructor(opts) {
         $.extend(this, opts);
         this.make();
-    },
-    make: function() {
+    }
+
+    make() {
         var me = this;
 
         this.dialog = new frappe.ui.Dialog({
@@ -76,9 +77,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
         this.prepare();
         this.dialog.set_value("attach_document_print", this.attach_document_print);
         this.dialog.show();
-    },
+    }
 
-    get_fields: function() {
+    get_fields() {
         let contactList = [];
         var fields= [
             {label:__("To"), fieldtype:"MultiSelect", reqd: 0, fieldname:"recipients",options:contactList},
@@ -128,8 +129,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
         }
 
         return fields;
-    },
-    prepare: function() {
+    }
+
+    prepare() {
         this.setup_subject_and_recipients();
         this.setup_print_language();
         this.setup_print();
@@ -137,11 +139,11 @@ frappe.erpnextswiss.MailComposer = Class.extend({
         this.setup_email();
         this.setup_last_edited_communication();
         this.setup_email_template();
-        
+
         if (this.email_template) {
             this.dialog.fields_dict.email_template.set_value(this.email_template);
         }
-        
+
         this.dialog.set_value("recipients", this.recipients || '');
         this.dialog.set_value("cc", this.cc || '');
         this.dialog.set_value("bcc", this.bcc || '');
@@ -152,8 +154,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
         this.dialog.fields_dict.subject.set_value(this.subject || '');
 
         this.setup_earlier_reply();
-    },
-    setup_subject_and_recipients: function() {
+    }
+
+    setup_subject_and_recipients() {
         this.subject = this.subject || "";
 
         if(!this.forward && !this.recipients && this.last_email) {
@@ -199,11 +202,11 @@ frappe.erpnextswiss.MailComposer = Class.extend({
         if (this.frm && !this.recipients) {
             this.recipients = this.frm.doc[this.frm.email_field];
         }
-    },
+    }
 
-    setup_email_template: function() {
+    setup_email_template() {
         var me = this;
-        
+
         this.dialog.fields_dict["email_template"].df.onchange = () => {
             var email_template = me.dialog.fields_dict.email_template.get_value();
 
@@ -229,7 +232,7 @@ frappe.erpnextswiss.MailComposer = Class.extend({
                 } else {
                     content_field.set_value(content.join(''));
                 }
-                
+
                 subject_field.set_value(reply.subject);
 
                 me.reply_added = email_template;
@@ -247,9 +250,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
                 },
             });
         }
-    },
+    }
 
-    setup_last_edited_communication: function() {
+    setup_last_edited_communication() {
         var me = this;
         if (!this.doc){
             if (cur_frm){
@@ -296,9 +299,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
 
         }
 
-    },
+    }
 
-    get_last_edited_communication: function() {
+    get_last_edited_communication() {
         if (!frappe.last_edited_communication[this.doc]) {
             frappe.last_edited_communication[this.doc] = {};
         }
@@ -308,13 +311,13 @@ frappe.erpnextswiss.MailComposer = Class.extend({
         }
 
         return frappe.last_edited_communication[this.doc][this.key];
-    },
+    }
 
-    selected_format: function() {
+    selected_format() {
         return this.dialog.fields_dict.select_print_format.input.value || (this.frm && this.frm.meta.default_print_format) || "Standard";
-    },
+    }
 
-    get_print_format: function(format) {
+    get_print_format(format) {
         if (!format) {
             format = this.selected_format();
         }
@@ -324,9 +327,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
         } else {
             return {};
         }
-    },
+    }
 
-    setup_print_language: function() {
+    setup_print_language() {
         var me = this;
         var doc = this.doc || cur_frm.doc;
         var fields = this.dialog.fields_dict;
@@ -356,9 +359,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
         } else {
             $(fields.language_sel.input).val(doc.language);
         }
-    },
+    }
 
-    setup_print: function() {
+    setup_print() {
         // print formats
         var fields = this.dialog.fields_dict;
 
@@ -379,8 +382,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
             $(fields.attach_document_print.wrapper).toggle(false);
         }
 
-    },
-    setup_attach: function() {
+    }
+
+    setup_attach() {
         var fields = this.dialog.fields_dict;
         var attach = $(fields.select_attachments.wrapper);
 
@@ -417,15 +421,16 @@ frappe.erpnextswiss.MailComposer = Class.extend({
             .find(".add-more-attachments a")
             .on('click',() => new frappe.ui.FileUploader(args));
         this.render_attach();
-    },
-    render_attach:function(){
+    }
+
+    render_attach() {
         var fields = this.dialog.fields_dict;
         var attach = $(fields.select_attachments.wrapper).find(".attach-list").empty();
         var check_attachments = "";
         if (this.check_all_attachments) {
             check_attachments = " checked ";
         }
-        
+
         var files = [];
         if (this.attachments && this.attachments.length) {
             files = files.concat(this.attachments);
@@ -439,7 +444,7 @@ frappe.erpnextswiss.MailComposer = Class.extend({
                 if (!f.file_name) return;
                 f.file_url = frappe.urllib.get_full_url(f.file_url);
                 f.check_attachments = check_attachments;
-                
+
                 $(repl('<p class="checkbox">'
                     +   '<label><span><input type="checkbox" data-file-name="%(name)s" %(check_attachments)s></input></span>'
                     +       '<span class="small">%(file_name)s</span>'
@@ -450,8 +455,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
             });
         }
         this.select_attachments();
-    },
-    select_attachments:function(){
+    }
+
+    select_attachments() {
         let me = this;
         if(me.dialog.display) {
             let wrapper = $(me.dialog.fields_dict.select_attachments.wrapper);
@@ -464,8 +470,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
                 wrapper.find('[data-file-name="'+ filename +'"]').prop("checked", true);
             });
         }
-    },
-    setup_email: function() {
+    }
+
+    setup_email() {
         // email
         var me = this;
         var fields = this.dialog.fields_dict;
@@ -482,9 +489,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
             frappe.boot.user.send_me_a_copy = val;
         });
 
-    },
+    }
 
-    send_action: function() {
+    send_action() {
         var me = this;
         var btn = me.dialog.get_primary_btn();
 
@@ -502,9 +509,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
         } else {
             me.send_email(btn, form_values, selected_attachments);
         }
-    },
+    }
 
-    get_values: function() {
+    get_values() {
         var form_values = this.dialog.get_values();
 
         // cc
@@ -523,9 +530,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
         }
 
         return form_values;
-    },
+    }
 
-    save_as_draft: function() {
+    save_as_draft() {
         if (this.dialog && this.frm) {
             try {
                 let message = this.dialog.get_value('content');
@@ -537,7 +544,7 @@ frappe.erpnextswiss.MailComposer = Class.extend({
                 console.warn('[Communication] localStorage is full. Cannot save message as draft');
             }
         }
-    },
+    }
 
     delete_saved_draft() {
         if (this.dialog) {
@@ -548,9 +555,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
                 console.warn('[Communication] Cannot delete localStorage item'); // eslint-disable-line
             }
         }
-    },
+    }
 
-    send_email: function(btn, form_values, selected_attachments, print_html, print_format) {
+    send_email(btn, form_values, selected_attachments, print_html, print_format) {
         var me = this;
         me.dialog.hide();
 
@@ -637,18 +644,18 @@ frappe.erpnextswiss.MailComposer = Class.extend({
                 }
             }
         });
-    },
+    }
 
-    is_print_letterhead_checked: function() {
+    is_print_letterhead_checked() {
         if (this.frm && $(this.frm.wrapper).find('.form-print-wrapper').is(':visible')){
             return $(this.frm.wrapper).find('.print-letterhead').prop('checked') ? 1 : 0;
         } else {
             return (frappe.model.get_doc(":Print Settings", "Print Settings") ||
                 { with_letterhead: 1 }).with_letterhead ? 1 : 0;
         }
-    },
+    }
 
-    setup_earlier_reply: function() {
+    setup_earlier_reply() {
         let fields = this.dialog.fields_dict;
         let signature = frappe.boot.user.email_signature || "";
 
@@ -718,9 +725,9 @@ frappe.erpnextswiss.MailComposer = Class.extend({
             content = "<div><br></div>" + reply;
         }
         fields.content.set_value(content);
-    },
+    }
 
-    html2text: function(html) {
+    html2text(html) {
         // convert HTML to text and try and preserve whitespace
         var d = document.createElement( 'div' );
         d.innerHTML = html.replace(/<\/div>/g, '<br></div>')  // replace end of blocks
@@ -731,4 +738,4 @@ frappe.erpnextswiss.MailComposer = Class.extend({
         // replace multiple empty lines with just one
         return text.replace(/\n{3,}/g, '\n\n');
     }
-});
+};
