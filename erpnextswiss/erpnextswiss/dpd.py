@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2025, libracore (https://www.libracore.com) and contributors
+# Copyright (c) 2025-2026, libracore (https://www.libracore.com) and contributors
 # For license information, please see license.txt
 
 import frappe
@@ -41,7 +41,7 @@ class DPD_API:
         return
         
     def get_auth(self):
-        url = "{0}/rest/services/LoginService/V2_1/getAuth".format(self.host)
+        url = "{0}/external/rest/services/LoginService/getAuth".format(self.host)
 
         payload = json.dumps({
           "delisId": self.delis_id,
@@ -81,7 +81,7 @@ class DPD_API:
         pickup_address = frappe.get_doc("Address", shipment_doc.pickup_address_name)
         delivery_address = frappe.get_doc("Address", shipment_doc.delivery_address_name)
 
-        url = "{0}/rest/services/ShipmentService/V3_2/storeOrders".format(self.host)
+        url = "{0}/external/rest/services/ShipmentService/storeOrders".format(self.host)
 
         parcels = []
         for p in shipment_doc.shipment_parcel:
@@ -93,13 +93,15 @@ class DPD_API:
         # use recipient name from shipment if available, otherwise, fall back to customer name
         recipient_name = shipment_doc.get("recipient_name") \
             or frappe.get_value("Customer", shipment_doc.delivery_customer, "customer_name") if frappe.db.exists("Customer", shipment_doc.delivery_customer) else shipment_doc.delivery_customer
+        
         product = shipment_doc.get("product") or self.product           # use product from shipment if avalable or fallback from settings
         if shipment_doc.delivery_contact_name:
             recipient_phone = frappe.get_value("Contact", shipment_doc.delivery_contact_name, "phone")
         else:
             recipient_phone = None
-            
-        payload = json.dumps({
+        
+        #Prepare payload
+        payload_dict = {
             "authentication": {
                 "delisId": self.delis_id,
                 "authToken": self.token,
@@ -142,7 +144,24 @@ class DPD_API:
                     }
                 ]
             }
-        })
+        }
+        
+        #add recipient contact from shipment if available and different to recipient_name, Fallback to regular Contact
+        if shipment_doc.get("recipient_contact") and shipment_doc.get("recipient_contact") != recipient_name:
+            payload_dict["storeOrders"]["order"][0]["generalShipmentData"]["recipient"]["name2"] = shipment_doc.get("recipient_contact")
+        elif shipment_doc.get('delivery_contact_name'):
+            contact_doc = frappe.get_doc("Contact", shipment_doc.get('delivery_contact_name'))
+            if contact_doc.get('first_name') and contact_doc.get('last_name'):
+                full_name = "{0} {1}".format(contact_doc.get('first_name'), contact_doc.get('last_name'))
+                if full_name != recipient_name:
+                    payload_dict["storeOrders"]["order"][0]["generalShipmentData"]["recipient"]["name2"] = full_name
+        
+        #add address_line_2 if avaliable
+        if delivery_address.get('address_line2'):
+            payload_dict["storeOrders"]["order"][0]["generalShipmentData"]["recipient"]["street2"] = delivery_address.get('address_line2')
+        
+        #create json
+        payload = json.dumps(payload_dict)
         headers = {
             'Content-Type': 'application/json'
         }
@@ -154,10 +173,10 @@ class DPD_API:
         if self.debug:
             frappe.log_error("{0}".format(response.text), "DPD Shipment Response (Debug)")
             
-        if response.status_code == requests.codes.ok:
+        if response.status_code in [requests.codes.ok, requests.codes.created]:
             response_json = response.json()
             pdf_base64 = response_json.get("orderResult").get("parcellabelsPDF")
-            mps_id = response_json.get("orderResult").get("shipmentResponses")[0].get("identificationNumber")
+            mps_id = response_json.get("orderResult").get("shipmentResponses")[0].get("mpsId")
             parcel_id = response_json.get("orderResult").get("shipmentResponses")[0].get("parcelInformation")[0].get("parcelLabelNumber")
 
             # attach pdf

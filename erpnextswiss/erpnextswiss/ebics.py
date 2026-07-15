@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2024-2025, libracore (https://www.libracore.com) and contributors
+# Copyright (c) 2024-2026, libracore (https://www.libracore.com) and contributors
 # For license information, please see license.txt
 #
 # Sync can be externally triggered by
@@ -11,6 +11,19 @@ import frappe
 from frappe.utils import add_days
 from datetime import datetime
 
+def background_sync(debug=False):
+    # run this in a separate long background worker (default has a timeout of ~300sec)
+    # note: debug statements will be logged in ./logs/worker.log
+    frappe.enqueue(
+        'erpnextswiss.erpnextswiss.ebics.sync', 
+        queue='long', 
+        timeout=3600,
+        **{
+            'debug': debug
+        }
+    )
+    return
+    
 def sync(debug=False):
     if debug:
         print("Starting sync...")
@@ -45,10 +58,15 @@ def sync_connection(connection, debug=False):
     while date < datetime.today().date():
         if debug:
             print("Syncing {0}...".format(date.strftime("%Y-%m-%d")))
-            
-        conn.get_transactions(date.strftime("%Y-%m-%d"), debug=debug)
-        # note: sync date update happens in the transaction record when there are results
         
+        try:
+            conn.get_transactions(date.strftime("%Y-%m-%d"), debug=debug)
+            # note: sync date update happens in the transaction record when there are results
+        except Exception as err:
+            frappe.log_error("{0} occurred when trying to sync ebics {1} for {2}".format(err, connection, date), "ebics sync get transactions error")
+            # stop reading forward, this will be recovered with the next sync run (because of sync date)
+            break
+
         date = add_days(date, 1)
     
     return
